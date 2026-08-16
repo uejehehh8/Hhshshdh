@@ -1,5 +1,5 @@
 aiogram==3.12.0
 requests==2.32.3
-r2pipe==5.9.4
+r2pipe==1.9.8
 asn1crypto==1.5.1
 multiprocess==0.70.16
