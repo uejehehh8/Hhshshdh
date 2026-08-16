@@ -43,35 +43,20 @@ for module in required_modules:
             )
 
 
+# ---------------- Install Package ---------------
+def install_package(pkg):
+    """Skip package installation on non-Termux environments"""
+    pass
+
+
 # ---------------- Check Dependencies ---------------
 def check_dependencies():
     try:
         M.subprocess.run(['java', '-version'], stdout=M.subprocess.PIPE, stderr=M.subprocess.PIPE, check=True, text=True)
     except (M.subprocess.CalledProcessError, FileNotFoundError):
-        if M.os.name == 'posix':
-            install_package('openjdk-17')
-        else:
-            exit(
-                f'\n\n{C.ERROR} Java is not installed on Your System.  ✘\n'
-                f'\n{C.INFO} Install Java & Run Script Again in New CMD.  ✘\n'
-                f'\n{C.INFO} Verify Java Installation {C.G} java --version\n'
-            )
-
-    if M.os.name == 'posix': install_package('aapt')
-
-
-# ---------------- Install Package ---------------
-def install_package(pkg):
-    try:
-        result = M.subprocess.run(['pkg', 'list-installed'], stdout=M.subprocess.PIPE, stderr=M.subprocess.PIPE, text=True)
-        if pkg not in result.stdout:
-            print(f"{C.S} Installing {C.E} {C.OG}➸❥ {C.G}{pkg}...\n")
-            M.subprocess.check_call(['pkg', 'install', '-y', pkg])
-            Clear()
-    except (M.subprocess.CalledProcessError, Exception):
         exit(
-            f"\n\n{C.ERROR} No Internet Connection.  ✘\n"
-            f"\n{C.INFO} Internet Connection is Required to Installation  {C.G}pkg install {pkg}\n"
+            f'\n\n{C.ERROR} Java is not installed on Your System.  ✘\n'
+            f'\n{C.INFO} Install Java & Run Script Again.\n'
         )
 
 check_dependencies()
