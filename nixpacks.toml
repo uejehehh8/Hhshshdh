@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["openjdk-17", "aapt", "radare2", "unzip", "wget"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python3 bot.py"
