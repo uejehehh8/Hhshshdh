@@ -34,9 +34,8 @@ from aiogram.filters import CommandStart, Command
 #                    المتغيرات - عدّلها
 # ══════════════════════════════════════════════════════════════
 
-BOT_TOKEN = "8757581045:AAF6c-XB9xdXdyLlOtVx4Er3ve5TTH8J8R0"
-
-ADMIN_IDS = [8588392906]
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "0").split(",") if x.strip()]
 
 PUBLIC_BOT = True
 
