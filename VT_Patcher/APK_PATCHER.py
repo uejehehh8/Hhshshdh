@@ -132,7 +132,8 @@ def VT_YC_Patch():
 
     manifest_path = M.os.path.join(decompile_dir, 'AndroidManifest.xml')
 
-    if M.os.name == 'posix':
+    # ========== التعديل الأول ==========
+    if M.os.name == 'posix' and M.shutil.which('termux-wake-lock'):
         M.subprocess.run(['termux-wake-lock'])
         print(f"\n{C.X}{C.C} Acquiring Wake Lock...\r")
 
@@ -218,7 +219,8 @@ def VT_YC_Patch():
 
     print(f'\n{C.R}  \u2620  VT_Patcher  \u2620  {C.OG}@VT_YC  {C.CC}\n')
 
-    if M.os.name == 'posix':
+    # ========== التعديل الثاني ==========
+    if M.os.name == 'posix' and M.shutil.which('termux-wake-unlock'):
         M.subprocess.run(['termux-wake-unlock'])
         exit(f"\n{C.X}{C.C} Releasing Wake Lock...\n")
     exit(0)
