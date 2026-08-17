@@ -167,22 +167,39 @@ def download_apk_from_url(url, work_dir):
     download_sources = [
         f"https://d.apkpure.net/b/APK/{package_name}?version=latest",
         f"https://d.cdnpure.com/b/APK/{package_name}?version=latest",
+        f"https://d.apkpure.com/b/APK/{package_name}?version=latest",
+        f"https://d2.apkpure.com/b/APK/{package_name}?version=latest",
     ]
     headers = {
-        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+        "Accept": "application/vnd.android.package-archive",
     }
     for source_url in download_sources:
         try:
-            resp = requests.get(source_url, headers=headers, stream=True, timeout=120, allow_redirects=True)
-            if resp.status_code == 200 and int(resp.headers.get("content-length", 0)) > 10000:
+            resp = requests.get(source_url, headers=headers, stream=True, timeout=180, allow_redirects=True)
+            content_type = resp.headers.get("content-type", "")
+            content_length = int(resp.headers.get("content-length", 0))
+            if resp.status_code == 200 and content_length > 100000 and "html" not in content_type:
                 with open(apk_path, "wb") as f:
                     for chunk in resp.iter_content(chunk_size=1024 * 64):
                         f.write(chunk)
-                if os.path.getsize(apk_path) > 10000:
+                if os.path.getsize(apk_path) > 100000:
                     return {"success": True, "path": apk_path, "package": package_name, "size": os.path.getsize(apk_path)}
+                else:
+                    os.remove(apk_path)
         except Exception:
             continue
-    return {"success": False, "error": f"فشل تحميل {package_name}\nجرب حمّل الـ APK يدوياً وأرسله.", "package": package_name}
+    return {
+        "success": False,
+        "error": (
+            f"فشل تحميل {package_name}\n"
+            f"جرب حمّل الـ APK يدوياً وأرسله.\n\n"
+            f"روابط تحميل يدوي:\n"
+            f"• https://apkpure.com/search?q={package_name}\n"
+            f"• https://apkcombo.com/search/{package_name}"
+        ),
+        "package": package_name
+    }
 
 
 # ══════════════════════════════════════════════════════════════
