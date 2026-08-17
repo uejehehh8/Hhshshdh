@@ -121,6 +121,165 @@ class FileCheck:
                     self.APKEditor_Path,
                     "bec1dd156850df8392c9a45a735b86ae71bc913325ee029ffbb4080a8b41ca1c"
                 ),
+                # ============= التعديل هنا =============
+                # تحميل النسخة العادية من APKTool (تعمل على جميع المعماريات)
+                (
+                    "https://github.com/TechnoIndian/Tools/releases/download/Tools/APKTool.jar",
+                    self.APKTool_Path,
+                    "b947b945b4bc455609ba768d071b64d9e63834079898dbaae15b67bf03bcd362"
+                ),
+                # =====================================
+                (
+                    "https://github.com/TechnoIndian/Tools/releases/download/Tools/Uber-Apk-Signer.jar",
+                    self.Sign_Jar,
+                    "e1299fd6fcf4da527dd53735b56127e8ea922a321128123b9c32d619bba1d835"
+                ),
+                (
+                    "https://raw.githubusercontent.com/TechnoIndian/Objectlogger/refs/heads/main/AES.smali",
+                    self.AES_Smali,
+                    "09db8c8d1b08ec3a2680d2dc096db4aa8dd303e36d0e3c2357ef33226a5e5e52"
+                ),
+                (
+                    "https://github.com/TechnoIndian/Tools/releases/download/Tools/Algorithm.dex",
+                    self.Algorithm_Dex,
+                    "f5c7f7764b45cb375aa3da0d78b6a0d141ec2d6b17bba81666c50e1ae8ab1fc3"
+                ),
+                (
+                    "https://raw.githubusercontent.com/TechnoIndian/Objectlogger/refs/heads/main/Hook.smali",
+                    self.Hook_Smali,
+                    "c62ac39b468eeda30d0732f947ab6c118f44890a51777f7787f1b11f8f3722c4"
+                ),
+                (
+                    "https://github.com/TechnoIndian/Tools/releases/download/Tools/lib_Pairip_CoreX.so",
+                    self.Pairip_CoreX,
+                    "22a7954092001e7c87f0cacb7e2efb1772adbf598ecf73190e88d76edf6a7d2a"
+                ),
+                
+                # ---------------- Pine HooK Source ----------------
+                (
+                    "https://github.com/TechnoIndian/PineHookPlus/releases/download/v1.0/config.json",
+                    self.config,
+                    "da5eef2fa153068e19fca6fabfd144fbb9d7075a61e333814369bd36c51289c1"
+                ),
+                (
+                    "https://github.com/TechnoIndian/PineHookPlus/releases/download/v1.0/libpine32",
+                    self.libpine32,
+                    "94854417f9bbb4e2dc49a5edede51dfc1eafca2c7cbb163f59585da7d97fc5db"
+                ),
+                (
+                    "https://github.com/TechnoIndian/PineHookPlus/releases/download/v1.0/libpine64",
+                    self.libpine64,
+                    "d3e415243b80b866d2c75408cc9a26ba4fcab0775f798442f9a622097d845e0c"
+                ),
+                (
+                    "https://github.com/TechnoIndian/PineHookPlus/releases/download/v1.0/loader.dex",
+                    self.loader,
+                    "c23fcc7aac75d3ea760523876dc837b6506726194c2fe4376d5172c8271b7c46"
+                ),
+            ]
+        )
+
+        M.os.system('cls' if M.os.name == 'nt' else 'clear')
+
+
+    # ---------------- Files Download isEmulator ----------------
+    def F_D_A(self):
+
+        self.Download_Files(
+            [
+                (
+                    "https://github.com/TechnoIndian/Tools/releases/download/Tools/APKTool.jar",
+                    self.APKTool_Path_E,
+                    "b947b945b4bc455609ba768d071b64d9e63834079898dbaae15b67bf03bcd362"
+                )
+            ]
+                    )        )
+
+
+    def isEmulator(self):
+        self.APKTool_Path_E = M.os.path.join(run_dir, "APKTool_OR.jar")
+
+
+    # ---------------- SHA-256 CheckSum ----------------
+    def Calculate_CheckSum(self, file_path):
+        sha256_hash = M.hashlib.sha256()
+        try:
+            with open(file_path, "rb") as f:
+                for byte_block in iter(lambda: f.read(4096), b""):
+                    sha256_hash.update(byte_block)
+            return sha256_hash.hexdigest()
+        except FileNotFoundError:
+            return None
+
+
+    # ---------------- Download Files ----------------    
+    def Download_Files(self, Jar_Files):
+
+        import requests
+
+        for File_URL, File_Path, Expected_CheckSum in Jar_Files:
+            File_Name = M.os.path.basename(File_Path)
+
+            if M.os.path.exists(File_Path):
+                if self.Calculate_CheckSum(File_Path) == Expected_CheckSum:
+                    continue
+                else:
+                    print(
+                        f"{C.ERROR} {C.C}{File_Name} {C.R}is Corrupt (Checksum Mismatch).  ✘\n"
+                        f"\n{C.INFO} Re-Downloading, Need Internet Connection.\n"
+                    )
+
+                    M.os.remove(File_Path)
+
+            try:
+                try:
+                    Version = requests.get("https://raw.githubusercontent.com/VT_YC/VT_Patcher/main/VERSION", timeout=5).text.strip()
+                except:
+                    Version = __version__
+
+                if Version != str(__version__):
+                    print(f"\n{C.S} Update Available {C.E} {C.OG} VT_Patcher ➸❥ {C.G}{Version}...\n\n")
+
+                print(f'\n{C.S} Downloading {C.E} {C.G}{File_Name}')
+
+                with requests.get(File_URL, stream=True) as response:
+                    if response.status_code == 200:
+                        total_size = int(response.headers.get('content-length', 0))
+
+                        with open(File_Path, 'wb') as f:
+                            print(f'       |')
+
+                            for data in response.iter_content(1024 * 64):
+                                f.write(data)
+
+                                print(f"\r       {C.CC}╰┈ PS {C.OG}➸❥ {C.G}{f.tell()/(1024*1024):.2f}/{total_size/(1024*1024):.2f} MB ({f.tell()/total_size*100:.1f}%)", end='', flush=True)
+
+                        print('  ✔\n')
+
+                    else:
+                        exit(
+                            f'\n\n{C.ERROR} Failed to download {C.Y}{File_Name} {C.R}Status Code: {response.status_code}  ✘\n'
+                            f'\n{C.INFO} Restart Script...\n'
+                        )
+
+            except requests.exceptions.RequestException:
+                exit(
+                    f'\n\n{C.ERROR} Got an error while Fetching {C.Y}{File_Path}\n'
+                    f'\n{C.ERROR} No internet Connection\n'
+                    f'\n{C.INFO} Internet Connection is Required to Download {C.Y}{File_Name}\n'
+                )
+
+
+    # ---------------- Files Download Link ----------------
+    def F_D(self):
+
+        self.Download_Files(
+            [
+                (
+                    "https://github.com/TechnoIndian/Tools/releases/download/Tools/APKEditor.jar",
+                    self.APKEditor_Path,
+                    "bec1dd156850df8392c9a45a735b86ae71bc913325ee029ffbb4080a8b41ca1c"
+                ),
                 (
                     "https://github.com/TechnoIndian/Tools/releases/download/Tools/APKTool.jar" if M.os.name == 'nt' else "https://github.com/TechnoIndian/Tools/releases/download/Tools/APKTool_Termux.jar",
 
