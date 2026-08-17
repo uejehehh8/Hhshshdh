@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""
-══════════════════════════════════════════════════════════════
-  VT_Patcher Telegram Bot v2.0.0
-  Developer: Joker|M4
-  Channel: @VT_YC
-══════════════════════════════════════════════════════════════
-"""
-
 import os
 import re
 import sys
@@ -15,37 +7,34 @@ import shutil
 import asyncio
 import logging
 import subprocess
+import urllib.parse
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import (
     Message, CallbackQuery, FSInputFile,
-    InlineKeyboardButton
+    InlineKeyboardMarkup, InlineKeyboardButton
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.filters import CommandStart, Command
-
+from aiohttp import ClientTimeout
+from aiogram.client.session.aiohttp import AiohttpSession
 
 # ══════════════════════════════════════════════════════════════
-#                    المتغيرات - عدّلها
+#                    المتغيرات
 # ══════════════════════════════════════════════════════════════
 
-BOT_TOKEN = "8757581045:AAF6c-XB9xdXdyLlOtVx4Er3ve5TTH8J8R0"
-
-ADMIN_IDS = [8588392906]
-
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "0").split(",") if x.strip()]
 PUBLIC_BOT = True
-
 MAX_FILE_SIZE = 50 * 1024 * 1024
-
+MAX_DOWNLOAD_SIZE = 500 * 1024 * 1024
 TEMP_DIR = os.path.join(os.path.expanduser("~"), "vt_bot_temp")
-
 TIMEOUT = 600
-
 VT_PATCHER_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ══════════════════════════════════════════════════════════════
@@ -56,18 +45,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger("VT_Bot")
 
 
-# ══════════════════════════════════════════════════════════════
-#                         الحالات
-# ══════════════════════════════════════════════════════════════
-
 class PatchStates(StatesGroup):
     selecting_patches = State()
     processing = State()
 
-
-# ══════════════════════════════════════════════════════════════
-#                      الصلاحيات
-# ══════════════════════════════════════════════════════════════
 
 def is_authorized(user_id):
     if PUBLIC_BOT:
@@ -138,15 +119,80 @@ def get_confirm_keyboard():
 
 
 # ══════════════════════════════════════════════════════════════
+#                   تحميل APK من الروابط
+# ══════════════════════════════════════════════════════════════
+
+SUPPORTED_STORES = [
+    "play.google.com",
+    "apkpure.com",
+    "apkcombo.com",
+    "apkmirror.com",
+    "apps.rustore.ru",
+    "appgallery.huawei.com",
+]
+
+
+def extract_package_from_url(url):
+    parsed = urllib.parse.urlparse(url)
+    params = urllib.parse.parse_qs(parsed.query)
+    if "play.google.com" in parsed.netloc:
+        return params.get("id", [None])[0]
+    if "apkpure.com" in parsed.netloc:
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) >= 2:
+            return parts[-1]
+    if "apkcombo.com" in parsed.netloc:
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) >= 2:
+            return parts[-1]
+    return None
+
+
+def is_store_url(text):
+    text = text.strip()
+    if not text.startswith(("http://", "https://")):
+        return False
+    try:
+        parsed = urllib.parse.urlparse(text)
+        return any(store in parsed.netloc for store in SUPPORTED_STORES)
+    except:
+        return False
+
+
+def download_apk_from_url(url, work_dir):
+    import requests
+    package_name = extract_package_from_url(url)
+    if not package_name:
+        return {"success": False, "error": "لم أتمكن من استخراج اسم الحزمة من الرابط"}
+    apk_path = os.path.join(work_dir, f"{package_name}.apk")
+    download_sources = [
+        f"https://d.apkpure.net/b/APK/{package_name}?version=latest",
+        f"https://d.cdnpure.com/b/APK/{package_name}?version=latest",
+    ]
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36"
+    }
+    for source_url in download_sources:
+        try:
+            resp = requests.get(source_url, headers=headers, stream=True, timeout=120, allow_redirects=True)
+            if resp.status_code == 200 and int(resp.headers.get("content-length", 0)) > 10000:
+                with open(apk_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024 * 64):
+                        f.write(chunk)
+                if os.path.getsize(apk_path) > 10000:
+                    return {"success": True, "path": apk_path, "package": package_name, "size": os.path.getsize(apk_path)}
+        except Exception:
+            continue
+    return {"success": False, "error": f"فشل تحميل {package_name}\nجرب حمّل الـ APK يدوياً وأرسله.", "package": package_name}
+
+
+# ══════════════════════════════════════════════════════════════
 #                       محرك الباتش
 # ══════════════════════════════════════════════════════════════
 
 def build_command(apk_path, selected, settings):
     cmd = [sys.executable, "-m", "VT_Patcher.APK_PATCHER", "-i", apk_path]
-    
-    # === تفعيل APKEditor دائماً (لتجنب مشاكل aapt2) ===
-    cmd.append("-a")
-    
+    cmd.append("-a")  # APKEditor دائماً على السيرفر
     if selected.get("remove_ads"):
         cmd.append("-rmads")
     if selected.get("random_info"):
@@ -167,7 +213,8 @@ def build_command(apk_path, selected, settings):
         cmd.append("-t")
     if selected.get("aes_logs"):
         cmd.append("-A")
-    # settings.get("use_apkeditor") تم تفعيله افتراضياً
+    if settings.get("use_apkeditor"):
+        pass  # already added
     if settings.get("unsigned"):
         cmd.append("-u")
     if settings.get("hook_corex"):
@@ -181,15 +228,9 @@ def run_patch(apk_path, selected, settings):
         cmd = build_command(apk_path, selected, settings)
         env = os.environ.copy()
         env["PYTHONPATH"] = VT_PATCHER_DIR + os.pathsep + env.get("PYTHONPATH", "")
+        env["TERM"] = "xterm"
         logger.info(f"CMD: {' '.join(cmd)}")
-        result = subprocess.run(
-            cmd,
-            cwd=VT_PATCHER_DIR,
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT,
-            env=env
-        )
+        result = subprocess.run(cmd, cwd=VT_PATCHER_DIR, capture_output=True, text=True, timeout=TIMEOUT, env=env)
         elapsed = round(time.time() - start_time, 2)
         base_name = os.path.splitext(os.path.basename(apk_path))[0]
         expected_output = os.path.join(os.path.dirname(apk_path), f"{base_name}_Patched.apk")
@@ -236,9 +277,13 @@ async def cmd_start(message: Message, state: FSMContext):
         "━━━━━━━━━━━━━━━━━━━━━\n\n"
         "🔧 <b>أداة تعديل ملفات APK</b>\n\n"
         "📌 <b>الاستخدام:</b>\n"
-        "1️⃣ أرسل ملف APK\n"
+        "1️⃣ أرسل ملف APK أو رابط من المتجر\n"
         "2️⃣ اختر الباتشات\n"
         "3️⃣ انتظر واستلم\n\n"
+        "🌐 <b>المتاجر المدعومة:</b>\n"
+        "• Google Play\n"
+        "• APKPure\n"
+        "• APKCombo\n\n"
         "━━━━━━━━━━━━━━━━━━━━━\n"
         "👨‍💻 Dev: @VT_YC"
     )
@@ -261,7 +306,9 @@ async def cmd_help(message: Message):
         "🔒 Pairip - تخطي Pairip\n"
         "✈️ TG Patch - تعديل تليجرام\n"
         "🔑 AES Logs - حقن AES\n\n"
-        "⚠️ الحد: 50 MB | @VT_YC"
+        "━━━━━━━━━━━━━━━━━━━━━\n"
+        "📎 أرسل APK (حد 50MB) أو رابط متجر\n"
+        "📢 @VT_YC"
     )
 
 
@@ -283,7 +330,12 @@ async def handle_document(message: Message, state: FSMContext):
         await message.answer(f"⚠️ امتداد غير مدعوم: <code>{file_ext}</code>\nالمدعوم: {', '.join(SUPPORTED_EXT)}")
         return
     if doc.file_size and doc.file_size > MAX_FILE_SIZE:
-        await message.answer(f"⚠️ الملف كبير: {doc.file_size//(1024*1024)} MB\nالحد: 50 MB")
+        await message.answer(
+            f"⚠️ الملف كبير: {doc.file_size//(1024*1024)} MB\n"
+            f"📌 الحد: {MAX_FILE_SIZE//(1024*1024)} MB\n\n"
+            f"💡 أرسل رابط التطبيق من المتجر بدلاً من ذلك:\n"
+            f"<code>https://play.google.com/store/apps/details?id=com.example</code>"
+        )
         return
     await state.update_data(
         file_id=doc.file_id,
@@ -303,10 +355,34 @@ async def handle_document(message: Message, state: FSMContext):
 
 
 @router.message(F.text & ~F.text.startswith("/"))
-async def handle_text(message: Message):
+async def handle_text(message: Message, state: FSMContext):
     if not is_authorized(message.from_user.id):
         return
-    await message.answer("📎 أرسل ملف APK للبدء.")
+    text = message.text.strip()
+    if is_store_url(text):
+        package_name = extract_package_from_url(text)
+        await state.update_data(
+            store_url=text,
+            package_name=package_name,
+            selected_patches={"ssl_bypass": True},
+            extra_settings={},
+        )
+        await state.set_state(PatchStates.selecting_patches)
+        await message.answer(
+            f"🔗 <b>تم استلام الرابط:</b>\n\n"
+            f"📦 <b>الحزمة:</b> <code>{package_name or 'غير معروف'}</code>\n"
+            f"🌐 <b>المصدر:</b> {urllib.parse.urlparse(text).netloc}\n\n"
+            f"🔧 <b>اختر الباتشات:</b>",
+            reply_markup=get_patch_keyboard({"ssl_bypass": True})
+        )
+    else:
+        await message.answer(
+            "📎 أرسل ملف APK أو رابط من متجر مدعوم:\n\n"
+            "• Google Play Store\n"
+            "• APKPure\n"
+            "• APKCombo\n\n"
+            "مثال:\n<code>https://play.google.com/store/apps/details?id=com.example.app</code>"
+        )
 
 
 @router.callback_query(F.data.startswith("toggle:"))
@@ -377,9 +453,11 @@ async def start_patch(callback: CallbackQuery, state: FSMContext):
     settings_text = ""
     if active_settings:
         settings_text = "\n\n⚙️ <b>إعدادات:</b>\n" + "\n".join(f"  • {settings_names.get(s, s)}" for s in active_settings)
+
+    source = data.get("file_name") or data.get("package_name") or "غير معروف"
     await callback.message.edit_text(
         f"🚀 <b>ملخص:</b>\n\n"
-        f"📄 <code>{data.get('file_name')}</code>\n\n"
+        f"📄 <code>{source}</code>\n\n"
         f"🔧 <b>الباتشات ({len(active)}):</b>\n{patches_text}{settings_text}\n\n"
         f"❓ متابعة؟",
         reply_markup=get_confirm_keyboard()
@@ -395,47 +473,74 @@ async def confirm_patch(callback: CallbackQuery, state: FSMContext, bot: Bot):
     status_msg = await callback.message.edit_text("⏳ <b>جاري التحميل...</b>")
     work_dir = os.path.join(TEMP_DIR, str(user_id), str(int(time.time())))
     os.makedirs(work_dir, exist_ok=True)
-    file_path = os.path.join(work_dir, data["file_name"])
+
     try:
-        file_obj = await bot.get_file(data["file_id"])
-        await bot.download_file(file_obj.file_path, file_path)
+        # تحديد مصدر الملف
+        if "file_id" in data:
+            file_path = os.path.join(work_dir, data["file_name"])
+            file_obj = await bot.get_file(data["file_id"])
+            await bot.download_file(file_obj.file_path, file_path)
+
+        elif "store_url" in data:
+            await status_msg.edit_text(
+                "⏳ <b>جاري التحميل من المتجر...</b>\n\n"
+                f"📦 <code>{data.get('package_name', '')}</code>\n"
+                "🔄 قد يستغرق بعض الوقت..."
+            )
+            dl_result = await asyncio.to_thread(download_apk_from_url, data["store_url"], work_dir)
+            if not dl_result["success"]:
+                safe_err = dl_result["error"].replace("<", "&lt;").replace(">", "&gt;")
+                await status_msg.edit_text(f"❌ <b>فشل التحميل!</b>\n\n{safe_err}")
+                await state.clear()
+                return
+            file_path = dl_result["path"]
+            data["file_name"] = os.path.basename(file_path)
+        else:
+            await status_msg.edit_text("❌ لا يوجد ملف أو رابط.")
+            await state.clear()
+            return
+
         await status_msg.edit_text(
             "⏳ <b>جاري المعالجة...</b>\n\n"
             "✅ تم التحميل\n"
             "🔄 تطبيق الباتشات...\n\n"
             "💡 <i>قد تأخذ عدة دقائق</i>"
         )
+
         selected = data.get("selected_patches", {})
         settings = data.get("extra_settings", {})
         result = await asyncio.to_thread(run_patch, file_path, selected, settings)
+
         if result["success"]:
             output_path = result["output_path"]
-            output_size = os.path.getsize(output_path) / (1024 * 1024)
-            if os.path.getsize(output_path) > MAX_FILE_SIZE:
+            output_size = os.path.getsize(output_path)
+            output_size_mb = output_size / (1024 * 1024)
+
+            if output_size > MAX_FILE_SIZE:
                 await status_msg.edit_text(
-                    f"⚠️ الملف المعدل كبير: {output_size:.1f} MB\n"
-                    f"حد تليجرام 50 MB. جرب باتشات أقل."
+                    f"✅ <b>تم التعديل!</b>\n\n"
+                    f"📄 <code>{os.path.basename(output_path)}</code>\n"
+                    f"📏 الحجم: {output_size_mb:.1f} MB\n\n"
+                    f"⚠️ الملف أكبر من {MAX_FILE_SIZE//(1024*1024)}MB (حد تليجرام)\n"
+                    f"لا يمكن إرساله. جرب باتشات أقل."
                 )
                 return
-            await status_msg.edit_text(
-                "⏳ <b>جاري الرفع...</b>\n\n"
-                "✅ تم التحميل\n"
-                "✅ تم التعديل\n"
-                "📤 رفع الملف..."
-            )
+
+            await status_msg.edit_text("⏳ 📤 جاري رفع الملف...")
             output_file = FSInputFile(output_path, filename=os.path.basename(output_path))
             active_patches = [k for k, v in selected.items() if v]
             names = dict(PATCH_OPTIONS)
             patches_list = ", ".join(names.get(p, p).split(" ", 1)[-1] for p in active_patches[:5])
             if len(active_patches) > 5:
                 patches_list += f" +{len(active_patches)-5}"
+
             await bot.send_document(
                 chat_id=user_id,
                 document=output_file,
                 caption=(
                     f"✅ <b>تم بنجاح!</b>\n\n"
                     f"📄 <code>{os.path.basename(output_path)}</code>\n"
-                    f"📏 {output_size:.2f} MB\n"
+                    f"📏 {output_size_mb:.2f} MB\n"
                     f"⏱ {result['time']} ثانية\n"
                     f"🔧 {patches_list}\n\n"
                     f"☠️ VT_Patcher | @VT_YC"
@@ -452,8 +557,9 @@ async def confirm_patch(callback: CallbackQuery, state: FSMContext, bot: Bot):
                 f"❌ <b>فشل!</b>\n\n"
                 f"⏱ {result.get('time', '?')} ثانية\n\n"
                 f"<code>{error_text}</code>\n\n"
-                f"💡 جرب APKEditor من الإعدادات أو قلل الباتشات."
+                f"💡 جرب باتشات أقل أو أرسل الملف مرة أخرى."
             )
+
     except Exception as e:
         logger.error(f"Error: {e}")
         try:
@@ -461,7 +567,7 @@ async def confirm_patch(callback: CallbackQuery, state: FSMContext, bot: Bot):
             await status_msg.edit_text(f"❌ <b>خطأ:</b>\n<code>{safe_error}</code>")
         except:
             try:
-                await status_msg.edit_text("❌ حدث خطأ أثناء المعالجة.", parse_mode=None)
+                await status_msg.edit_text("❌ حدث خطأ.", parse_mode=None)
             except:
                 pass
     finally:
@@ -485,25 +591,9 @@ async def cancel_patch(callback: CallbackQuery, state: FSMContext):
 # ══════════════════════════════════════════════════════════════
 
 async def main():
-    if "xxxx" in BOT_TOKEN:
-        print("❌ عدّل BOT_TOKEN في الملف!")
+    if not BOT_TOKEN:
+        print("❌ ضع BOT_TOKEN في المتغيرات!")
         sys.exit(1)
     vt_path = os.path.join(VT_PATCHER_DIR, "VT_Patcher")
     if not os.path.isdir(vt_path):
-        print(f"❌ مجلد VT_Patcher/ غير موجود في: {VT_PATCHER_DIR}")
-        sys.exit(1)
-    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-    dp = Dispatcher(storage=MemoryStorage())
-    dp.include_router(router)
-    logger.info("☠️ VT_Patcher Bot Started! | @VT_YC")
-    try:
-        await dp.start_polling(bot)
-    finally:
-        await bot.session.close()
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Bot stopped.")
+        print(f"❌ مجلد VT_Patcher/ غير موجود في: {VT_P
