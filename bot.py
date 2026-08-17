@@ -592,8 +592,26 @@ async def cancel_patch(callback: CallbackQuery, state: FSMContext):
 
 async def main():
     if not BOT_TOKEN:
-        print("❌ ضع BOT_TOKEN في المتغيرات!")
+        print("ERROR: Set BOT_TOKEN variable!")
         sys.exit(1)
     vt_path = os.path.join(VT_PATCHER_DIR, "VT_Patcher")
     if not os.path.isdir(vt_path):
-        print(f"❌ مجلد VT_Patcher/ غير موجود في: {VT_P
+        print(f"ERROR: VT_Patcher/ not found in: {VT_PATCHER_DIR}")
+        sys.exit(1)
+    timeout = ClientTimeout(total=900, sock_read=600, sock_connect=30)
+    session = AiohttpSession(timeout=timeout)
+    bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML), session=session)
+    dp = Dispatcher(storage=MemoryStorage())
+    dp.include_router(router)
+    logger.info("VT_Patcher Bot Started! | @VT_YC")
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
+
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped.")
