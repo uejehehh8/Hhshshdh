@@ -229,12 +229,13 @@ def build_command(apk_path, selected, settings):
         cmd.append("-t")
     if selected.get("aes_logs"):
         cmd.append("-A")
-    if settings.get("use_apkeditor"):
-        pass  # already added
     if settings.get("unsigned"):
         cmd.append("-u")
+    # Hook CoreX فقط مع ملفات splits
     if settings.get("hook_corex"):
-        cmd.extend(["-p", "-x"])
+        ext = os.path.splitext(apk_path)[1].lower()
+        if ext in (".apks", ".xapk", ".apkm"):
+            cmd.extend(["-p", "-x"])
     return cmd
 
 
