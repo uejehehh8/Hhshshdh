@@ -21,7 +21,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.filters import CommandStart, Command
-from aiohttp import ClientTimeout
 from aiogram.client.session.aiohttp import AiohttpSession
 
 # ══════════════════════════════════════════════════════════════
@@ -598,8 +597,7 @@ async def main():
     if not os.path.isdir(vt_path):
         print(f"ERROR: VT_Patcher/ not found in: {VT_PATCHER_DIR}")
         sys.exit(1)
-    timeout = ClientTimeout(total=900, sock_read=600, sock_connect=30)
-    session = AiohttpSession(timeout=timeout)
+    session = AiohttpSession(timeout=900)
     bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML), session=session)
     dp = Dispatcher(storage=MemoryStorage())
     dp.include_router(router)
